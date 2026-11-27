@@ -1,0 +1,36 @@
+name: RA2 Custom Build
+
+# Builds Phobos (v0.5-alpha2 + AutoScramble) and publishes the DLL as a GitHub release,
+# so it can be downloaded without logging in.
+on:
+  push:
+    branches:
+    - ra2custom
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Build Phobos
+      uses: ./.github/actions/build-phobos
+      with:
+        sln-path: .
+        build-config: Release
+        build-type: RELEASE
+
+    - name: Publish release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      shell: pwsh
+      run: |
+        $tag = "ra2custom-${{ github.run_number }}"
+        gh release create $tag Release/Phobos.dll Release/Phobos.pdb Release/gamemd.edb --target ${{ github.sha }} --title $tag --notes "Phobos v0.5-alpha2 + AutoScramble (build ${{ github.sha }})" --prerelease

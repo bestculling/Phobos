@@ -33,6 +33,9 @@ DEFINE_HOOK(0x6F9E50, TechnoClass_AI, 0x5)
 
 	TechnoExt::Fetch(pThis)->OnEarlyUpdate();
 
+	if (pThis->WhatAmI() == AbstractType::Aircraft)
+		AircraftExt::UpdateAutoScramble(static_cast<AircraftClass*>(pThis));
+
 	return 0;
 }
 

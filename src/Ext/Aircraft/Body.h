@@ -33,6 +33,7 @@ public:
 	}
 
 	static void FireWeapon(AircraftClass* pThis, AbstractClass* pTarget);
+	static void UpdateAutoScramble(AircraftClass* pThis);
 	static bool PlaceReinforcementAircraft(AircraftClass* pThis, CoordStruct edgeCoords);
 	static CellStruct PickEdgeCellForPlane(AircraftTypeClass* pPlaneType, CellStruct destCell, Edge edge, bool isOnRetreat = false);
 	static DirType GetLandingDir(AircraftClass* pThis, BuildingClass* pDock = nullptr, bool isProduction = false);

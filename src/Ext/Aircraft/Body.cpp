@@ -3,6 +3,7 @@
 #include <Ext/AircraftType/Body.h>
 #include <Ext/BuildingType/Body.h>
 #include <Ext/WeaponType/Body.h>
+#include <Utilities/GeneralUtils.h>
 
 AircraftExt::ExtContainer AircraftExt::ExtMap;
 
@@ -215,6 +216,146 @@ AircraftTypeClass* AircraftExt::GetAircraftTypeExtra(AircraftClass* pAircraft)
 	}
 
 	return pType;
+}
+
+// =============================
+// AutoScramble (ra2-custom): idle aircraft with ammo automatically attack enemies that come
+// within AutoScramble.Range cells of their airport. Aircraft of the same owner share target
+// information: a target that is already covered by enough firepower is left to the others.
+
+static WeaponTypeClass* AutoScramble_WeaponFor(AircraftClass* pThis, TechnoClass* pTarget, double* pVersus)
+{
+	const int idx = pThis->SelectWeapon(pTarget);
+	const auto pWeaponStruct = pThis->GetWeapon(idx);
+	const auto pWeapon = pWeaponStruct ? pWeaponStruct->WeaponType : nullptr;
+
+	if (!pWeapon || !pWeapon->Projectile || !pWeapon->Warhead)
+		return nullptr;
+
+	if (pTarget->IsInAir() ? !pWeapon->Projectile->AA : !pWeapon->Projectile->AG)
+		return nullptr;
+
+	const double versus = GeneralUtils::GetWarheadVersusArmor(pWeapon->Warhead, pTarget, pTarget->GetTechnoType());
+
+	if (versus <= 0.0)
+		return nullptr;
+
+	if (pVersus)
+		*pVersus = versus;
+
+	return pWeapon;
+}
+
+void AircraftExt::UpdateAutoScramble(AircraftClass* pThis)
+{
+	const auto pTypeExt = AircraftTypeExt::Fetch(pThis->Type);
+
+	if (!pTypeExt->AutoScramble)
+		return;
+
+	// stagger the scans so not every aircraft searches in the same frame
+	if ((Unsorted::CurrentFrame + pThis->UniqueID) % 15 != 0)
+		return;
+
+	if (!pThis->IsAlive || !pThis->IsOnMap || pThis->InLimbo || pThis->Health <= 0)
+		return;
+
+	if (pThis->Team || pThis->Airstrike || pThis->IsALoaner || pThis->Ammo <= 0 || pThis->Target)
+		return;
+
+	const auto pOwner = pThis->Owner;
+
+	if (!pOwner || pOwner->Defeated || pOwner->Type->MultiplayPassive)
+		return;
+
+	// only take over idle aircraft: parked (sleep / guard) or flying home (enter)
+	const auto mission = pThis->CurrentMission;
+
+	if (mission != Mission::Sleep && mission != Mission::Guard && mission != Mission::Enter)
+		return;
+
+	// the protected area is centred on the aircraft's airport
+	AbstractClass* pCenter = pThis;
+
+	if (pThis->DockNowHeadingTo)
+		pCenter = pThis->DockNowHeadingTo;
+	else if (const auto pLink = pThis->GetNthLink(0))
+		pCenter = pLink;
+
+	const int range = static_cast<int>(pTypeExt->AutoScramble_Range * Unsorted::LeptonsPerCell);
+
+	TechnoClass* pBest = nullptr;
+	double bestScore = 0.0;
+
+	for (auto const pTechno : TechnoClass::Array)
+	{
+		if (!pTechno->IsAlive || !pTechno->IsOnMap || pTechno->InLimbo || pTechno->Health <= 0)
+			continue;
+
+		const auto pTargetOwner = pTechno->Owner;
+
+		if (!pTargetOwner || pTargetOwner == pOwner || pTargetOwner->Type->MultiplayPassive || pOwner->IsAlliedWith(pTargetOwner))
+			continue;
+
+		if (pTechno->CloakState == CloakState::Cloaked)
+			continue;
+
+		const bool isBuilding = pTechno->WhatAmI() == AbstractType::Building;
+
+		if (isBuilding && static_cast<BuildingClass*>(pTechno)->Type->InvisibleInGame)
+			continue;
+
+		const int distance = pCenter->DistanceFrom(pTechno);
+
+		if (distance > range)
+			continue;
+
+		double versus = 1.0;
+
+		if (!AutoScramble_WeaponFor(pThis, pTechno, &versus))
+			continue;
+
+		// shared information: how much firepower of ours is already on its way to this target?
+		double assigned = 0.0;
+		int attackers = 0;
+
+		for (auto const pOther : AircraftClass::Array)
+		{
+			if (pOther == pThis || pOther->Owner != pOwner || pOther->Target != pTechno || !pOther->IsAlive)
+				continue;
+
+			++attackers;
+			double otherVersus = 1.0;
+
+			if (const auto pOtherWeapon = AutoScramble_WeaponFor(pOther, pTechno, &otherVersus))
+				assigned += pOtherWeapon->Damage * Math::max(pOtherWeapon->Burst, 1) * Math::max(pOther->Ammo, 1) * otherVersus;
+		}
+
+		// already enough planes on it -> leave it, let the others pick something else
+		if (attackers > 0 && assigned >= pTechno->Health)
+			continue;
+
+		// lower score = better: close targets first, units before buildings,
+		// targets nobody is attacking yet before shared ones
+		double score = distance;
+
+		if (isBuilding)
+			score += range;
+
+		score += attackers * range * 2.0;
+
+		if (!pBest || score < bestScore)
+		{
+			pBest = pTechno;
+			bestScore = score;
+		}
+	}
+
+	if (!pBest)
+		return;
+
+	pThis->SetArchiveTarget(nullptr); // return to the airport afterwards instead of area guarding
+	pThis->ClickedMission(Mission::Attack, pBest, nullptr, nullptr);
 }
 
 // =============================
