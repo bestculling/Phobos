@@ -300,6 +300,9 @@ void AircraftExt::UpdateAutoScramble(AircraftClass* pThis)
 		if (pTechno->CloakState == CloakState::Cloaked)
 			continue;
 
+		if (!pTypeExt->AutoScramble_Infantry && pTechno->WhatAmI() == AbstractType::Infantry)
+			continue;
+
 		const bool isBuilding = pTechno->WhatAmI() == AbstractType::Building;
 
 		if (isBuilding && static_cast<BuildingClass*>(pTechno)->Type->InvisibleInGame)

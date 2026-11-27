@@ -35,6 +35,7 @@ public:
 	Valueable<int> Missile_TakeOffSeparation;
 	Valueable<bool> AutoScramble;
 	Valueable<double> AutoScramble_Range;
+	Valueable<bool> AutoScramble_Infantry;
 
 	explicit AircraftTypeExt(AircraftTypeClass* const OwnerObject) : TechnoTypeExt(OwnerObject)
 		, VoicePickup {}
@@ -61,6 +62,7 @@ public:
 		, Missile_TakeOffSeparation { 24 }
 		, AutoScramble { false }
 		, AutoScramble_Range { 15.0 }
+		, AutoScramble_Infantry { true }
 	{ }
 
 	AircraftTypeClass* OwnerObject() const

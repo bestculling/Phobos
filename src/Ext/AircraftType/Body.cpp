@@ -44,6 +44,7 @@ void AircraftTypeExt::LoadFromINIFile(CCINIClass* const pINI)
 	this->Missile_TakeOffAnim.Read(exINI, pSection, "Missile.TakeOffAnim");
 	this->AutoScramble.Read(exINI, pSection, "AutoScramble");
 	this->AutoScramble_Range.Read(exINI, pSection, "AutoScramble.Range");
+	this->AutoScramble_Infantry.Read(exINI, pSection, "AutoScramble.Infantry");
 }
 
 template <typename T>
@@ -74,6 +75,7 @@ void AircraftTypeExt::Serialize(T& Stm)
 		.Process(this->Missile_TakeOffSeparation)
 		.Process(this->AutoScramble)
 		.Process(this->AutoScramble_Range)
+		.Process(this->AutoScramble_Infantry)
 		;
 }
 
